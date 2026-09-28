@@ -1,7 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 CGROUP="/sys/fs/cgroup/mydocker"
-USER_NAME="nencit"
 API="./api"
 
 sudo mkdir -p "$CGROUP"
