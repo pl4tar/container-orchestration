@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: api
+  namespace: default
+  labels:
+    app: api
+spec:
+  selector:
+    matchLabels:
+      app: api        # какие Service'ы брать — по метке Service, не пода
+  endpoints:
+    - port: http      # имя порта в Service
+      path: /metrics
+      interval: 15s

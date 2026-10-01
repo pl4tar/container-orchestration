@@ -1,0 +1,47 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: api-alerts
+  namespace: monitoring
+  labels:
+    release: kube-prom
+spec:
+  groups:
+    - name: api.rules
+      rules:
+        - alert: ApiDown
+          expr: |
+            up{job="default/api"} == 0
+            or
+            absent(up{job="default/api"})
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "api is down or unreachable"
+            description: "Prometheus cannot scrape api (target down or missing) for 1 minute."
+
+        - alert: ApiHighErrorRate
+          expr: |
+            sum(rate(http_requests_total{namespace="default",status=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total{namespace="default"}[5m]))
+            > 0.05
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "api error rate > 5%"
+            description: "5xx error ratio is above 5% for 5 minutes"
+
+        - alert: ApiHighLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum by (le) (rate(http_response_duration_seconds_bucket{namespace="default"}[5m]))
+            ) > 2
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "api p95 latency > 2s"
+            description: "95th percentile response time is above 2s for 5 minutes"
