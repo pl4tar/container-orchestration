@@ -1,0 +1,8 @@
+.git
+.gitignore
+README.md
+wrapper.py
+AGENTS.md
+CLAUDE.md
+*.log
+my_docker.sh
