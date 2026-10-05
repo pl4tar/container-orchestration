@@ -9,14 +9,18 @@ spec:
   route:
     receiver: telegram
     groupBy: ["alertname", "namespace"]
-    groupWait: 30s
-    groupInterval: 5m
+    groupWait: 10s
+    groupInterval: 1m
     repeatInterval: 1h
+    matchers:
+      - name: namespace
+        value: "default"
+        matchType: "="
   receivers:
     - name: telegram
       telegramConfigs:
         - botToken:
-            name: alertmanager-telegram
+            name: alertmanager-tg
             key: bot_token
           chatID: 454688839
           sendResolved: true

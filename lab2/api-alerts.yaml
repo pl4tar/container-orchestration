@@ -23,11 +23,12 @@ spec:
 
         - alert: ApiHighErrorRate
           expr: |
-            sum(rate(http_requests_total{namespace="default",status=~"5.."}[5m]))
-            /
-            sum(rate(http_requests_total{namespace="default"}[5m]))
-            > 0.05
-          for: 5m
+            (
+              sum(rate(http_requests_total{namespace="default",status=~"5.."}[5m]))
+              /
+              sum(rate(http_requests_total{namespace="default"}[5m]))
+            ) > 0.05
+          for: 1m
           labels:
             severity: critical
           annotations:
