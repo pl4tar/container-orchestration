@@ -1,0 +1,5 @@
+apiVersion: v2
+name: api
+description: Подопытный сервис для лабы 2
+version: 0.1.0
+appVersion: "0.1.0"
