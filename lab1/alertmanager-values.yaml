@@ -1,0 +1,47 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: lab1-api-alerts
+  namespace: monitoring
+  labels:
+    release: kube-prom
+spec:
+  groups:
+    - name: lab1-api.rules
+      rules:
+        - alert: Lab1ApiMemoryNearLimit
+          expr: |
+            container_memory_working_set_bytes{namespace="default", pod=~"lab1-api.*", container="api"}
+            /
+            kube_pod_container_resource_limits{namespace="default", pod=~"lab1-api.*", resource="memory"}
+            > 0.85
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "lab1-api использует >85% памяти"
+            description: "Контейнер близок к OOM"
+
+        - alert: Lab1ApiCpuThrottling
+          expr: |
+            rate(container_cpu_cfs_throttled_periods_total{namespace="default", pod=~"lab1-api.*", container="api"}[5m])
+            /
+            rate(container_cpu_cfs_periods_total{namespace="default", pod=~"lab1-api.*", container="api"}[5m])
+            > 0.3
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "lab1-api throttled"
+            description: "Контейнер постоянно упирается в CPU-лимит"
+
+        - alert: Lab1ApiRestarting
+          expr: |
+            increase(kube_pod_container_status_restarts_total{namespace="default", pod=~"lab1-api.*"}[10m])
+            > 2
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "lab1-api перезапустился >2 раз за 10 минут"
+            description: "Похоже на crash loop или OOM."

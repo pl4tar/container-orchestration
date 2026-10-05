@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lab1-api
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lab1-api
+  template:
+    metadata:
+      labels:
+        app: lab1-api
+    spec:
+      containers:
+        - name: api
+          image: lab1-api:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "32Mi"
+            limits:
+              cpu: "500m"
+              memory: "64Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lab1-api
+  namespace: default
+  labels:
+    app: lab1-api
+spec:
+  selector:
+    app: lab1-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
