@@ -6,78 +6,92 @@
 
 Навайбкодили простой сервис на Go, и на скрине дернули все ручки. 
 
+<img src="images/memes/1.jpg" width="200" alt="brain? No tnx i use ai">
+
 <img src="images/part-0/server-metrics.png" width="600" alt="метрики сервиса на /metrics">
 
 По пути `/metrics` собраны метрики для дашборда RED. 
 
 
-Потом мы ставили **kind** вместо **minikube** (словили спойлер от одногруппника, что нельзя будет с миникубом уронить сервис в 3 лабе). Также мы разместили 3 ноды, по требованиям из задания. 
+Потом мы ставили **kind** вместо **minikube** (словили спойлер от одногруппника, что нельзя будет с миникубом уронить сервис в 3 лабе).  
+Также мы разместили 3 ноды, по требованиям из задания. 
 
 <img src="images/part-1/cluster-up.png" width="700" alt="ноды кластера в Ready">
 
 <!-- TODO: подпись — ниже вариант Данила: кластер из одной ноды, сервис выкачен через kubectl apply -->
 
-<img src="images/other/photo_2026-10-05%2015.32.28%20(1).jpeg" width="700" alt="создание кластера kind у Данила">
+<!-- <img src="images/other/photo_2026-10-05%2015.32.28%20(1).jpeg" width="700" alt="создание кластера kind у Данила">
 
 <img src="images/other/photo_2026-10-05%2015.32.29.jpeg" width="800" alt="нода кластера и загрузка образа через kind load у Данила">
 
 <img src="images/other/photo_2026-10-05%2015.32.30.jpeg" width="800" alt="деплой сервиса через kubectl apply у Данила">
 
-<img src="images/other/photo_2026-10-05%2015.32.28.jpeg" width="600" alt="под и сервис api у Данила">
+<img src="images/other/photo_2026-10-05%2015.32.28.jpeg" width="600" alt="под и сервис api у Данила"> -->
 
 ## Часть 1 — метрики (Prometheus + Grafana)
-<!-- TODO: что такое kube-prometheus-stack и что в нём пришло одним релизом -->
+Благодаря kube-prometheus-stack в нём пришло одним релизом полная система мониторинга кластера. \
+Там Grafana, Promrteus, Alertmanager и тд.  
+Prometheus узнаёт о сервисе по такой цепочке: ServiceMonitor → оператор → конфиг → scrape по IP пода.
+Т.е. у нас в чарте сервиса, в нашем случае `api`, лежит ServiceMonitor, который преедает запись что и как с метриками сервиса в API кубика (оператор) и уже тот передает конфиг в Prometeus. 
 
-<!-- TODO: как Prometheus узнаёт о сервисе: ServiceMonitor → оператор → конфиг → scrape по IP пода.
-     Какой селектор ServiceMonitor выбрал и почему -->
+Источники данных в Grafana — Prometheus подключён самим чартом, через ConfigMap и sidecar.
 
-<!-- TODO: подпись — источники данных в Grafana, Prometheus подключён чартом -->
+<img src="images/other/photo_2026-10-05%2015.32.23.jpeg"  alt="источники данных в Grafana">
 
-<img src="images/other/photo_2026-10-05%2015.32.23.jpeg" width="800" alt="источники данных в Grafana">
+цель api в состоянии UP, скрейп идёт на IP пода 
 
-<!-- TODO: подпись — цель api в состоянии UP, скрейп идёт на IP пода -->
+<img src="images/other/photo_2026-10-05%2015.32.26.jpeg"  alt="цель api в состоянии UP в Prometheus">
 
-<img src="images/other/photo_2026-10-05%2015.32.26.jpeg" width="800" alt="цель api в состоянии UP в Prometheus">
+ряды http_requests_total: лейблы namespace, pod, job, instance дописал Prometheus
 
-<!-- TODO: подпись — ряды http_requests_total: лейблы namespace, pod, job, instance дописал Prometheus -->
-
-<img src="images/other/photo_2026-10-05%2015.32.25.jpeg" width="800" alt="запрос http_requests_total в Prometheus">
+<img src="images/other/photo_2026-10-05%2015.32.25.jpeg"  alt="запрос http_requests_total в Prometheus">
 
 ### Дашборд RED
 
-| Панель | Запрос | Что показывает |
-|---|---|---|
-| Rate | <!-- TODO --> | |
-| Errors | <!-- TODO --> | |
-| Duration | <!-- TODO --> | |
-
-<!-- TODO: как дашборд доставляется в Grafana (ConfigMap + sidecar) и почему не через интерфейс -->
-
-<!-- TODO: что делал для нагрузки (/load, /fail, /slow) и как отреагировали графики -->
 Ниже предсталвены варианты графаны от нас двоих, но тут признаю, Данил выбрал более удачное отоброжение метрик, правда ошибки подкачали, я бы свой вариант оставил. 
 
-<img src="images/part-2/grafana.png" width="800" alt="дашборд RED в Grafana от Артёма">
-<img src="images/part-2/danil-Grafana.jpg" width="800" alt="дашборд RED в Grafana от Данила">
+<img src="images/part-2/grafana.png" width="800" alt="дашборд RED в Grafana от Артёма">  
+<img src="images/part-2/danil-Grafana.jpg" width="800" alt="дашборд RED в Grafana от Данила">  
+
+Дашборд лежит в репозитории файлом `charts/api/dashboards/red.json`.  
+>Почему сохранили файлом, а не через интерфейс?  
+
+Сохранённый руками дашборд живёт во внутренней базе Grafana, а у неё нет постоянного диска после рестарта пода он исчезнет, рил была такая проблема, пришлось смотреть как сохранять. И его можно будет схоранить в репозитории, то есть его можно сдать и восстановить на новом кластере)  
+
+**Grafana такая после рестарта:**  
+<img src="images/memes/grafana-bd.png" width="300" alt="meme grafana">
+
 
 ## Часть 2 — логи (Loki + Grafana)
----
-<!-- TODO: разделение ролей: Loki хранит, Alloy собирает. Путь строки от stdout до Grafana -->
 
-<img src="images/part-3/loki-install.png" width="700" alt="установка Loki">
-
-<img src="images/other/photo_2026-10-05%2015.32.30%20(1).jpeg" width="700" alt="установка Loki у Данила">
-
+Как я понял: `Loki` — это только хранилище, которое принимает строки по HTTP и отвечает на запросы, сам ничего не собирает. Собирает `Alloy` — агент, который стоит на каждой ноде.  
+<img src="images/other/photo_2026-10-05%2015.32.30%20(1).jpeg" width="700" alt="установка Loki у Данила">  
 <img src="images/part-3/loki-running.png" width="600" alt="поды Loki и Alloy">
 
-<!-- TODO: что делает конфиг Alloy по шагам, какие лейблы назначаются и почему trace_id не лейбл -->
+Путь одной строки:  
+сервис пишет JSON в stdout;  
+containerd записывает его в файл на диске ноды, /var/log/pods/<namespace>_<под>_<UID>/api/0.log, дописывая в начало время и имя потока;  
+Alloy на этой ноде читает файл, срезает префикс и отправляет строку в Loki;  
+Loki сохраняет её, Grafana достаёт запросом.  
 
-<!-- TODO: запрос LogQL, которым нашёл ошибку от /fail -->
+>Что делает конфиг Alloy
+
+Конфиг — это конвейер из пяти блоков:  
+**discovery.relabel** — превращает данные о поде в лейблы и в путь к файлу лога;  
+**loki.source.file** — читает найденные файлы;  
+**loki.process со стадией cri** — убирает префикс containerd, оставляя исходную строку сервиса;   
+**loki.write** — отправляет в Loki.  
+
+Лейблов пять: namespace, pod, container, app, node. Loki строит индекс только по лейблам, и каждое уникальное их сочетание — отдельный поток. У trace_id значение новое на каждый запрос: сделай его лейблом, и потоков станет столько же, сколько запросов, индекс распухнет. Поэтому он остаётся в тексте строки и ищется при запросе.
+
+Запрос LogQL
+{namespace="app", app="api"} | json | level="ERROR"
 
 <img src="images/part-3/logs.png" width="800" alt="ошибка /fail в логах Grafana">
 
 <img src="images/other/photo_2026-10-05%2015.32.31.jpeg" width="800" alt="ошибка /fail в логах Grafana у Данила">
 
-<!-- TODO: подпись — метрики и логи в одном окне: панель логов на дашборде RED -->
+Метрики и логи в одном окне: на дашборд к панелям RED добавлена панель с логами из Loki. Всплеск на графике ошибок и строка ERROR в логах видны рядом, на одной шкале времени.
 
 <img src="images/other/photo_2026-10-05%2015.32.32.jpeg" width="800" alt="дашборд с панелью логов из Loki">
 
