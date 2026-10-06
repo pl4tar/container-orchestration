@@ -10,3 +10,12 @@ kubeProxy:
 prometheus:
   prometheusSpec:
     serviceMonitorSelectorNilUsesHelmValues: false
+
+
+grafana:
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      uid: loki
+      access: proxy
+      url: http://loki.monitoring.svc:3100
