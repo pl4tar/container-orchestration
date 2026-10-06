@@ -5,4 +5,8 @@ kubeControllerManager:
 kubeScheduler:
   enabled: false
 kubeProxy:
-  enabled: falsed
+  enabled: false
+
+prometheus:
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false

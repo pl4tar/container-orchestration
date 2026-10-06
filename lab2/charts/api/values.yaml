@@ -14,3 +14,11 @@ resources:
   requests:
     cpu: 50m
     memory: 32Mi
+
+serviceMonitor:
+  enabled: true
+  interval: 15s
+  labels: {}
+
+dashboard:
+  enabled: true
