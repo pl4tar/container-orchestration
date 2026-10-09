@@ -1,0 +1,26 @@
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: telegram-config
+  namespace: monitoring
+  labels:
+    alertmanagerConfig: telegram
+spec:
+  route:
+    receiver: telegram
+    groupBy: ["alertname", "namespace"]
+    groupWait: 10s
+    groupInterval: 1m
+    repeatInterval: 1h
+    matchers:
+      - name: namespace
+        value: "default"
+        matchType: "="
+  receivers:
+    - name: telegram
+      telegramConfigs:
+        - botToken:
+            name: alertmanager-tg
+            key: bot_token
+          chatID: 454688839
+          sendResolved: true
