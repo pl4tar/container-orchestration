@@ -1,0 +1,140 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: shop-guardrails
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: check-limits
+      match: 
+        any:
+          - resources:
+              kinds:
+                - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+                - monitoring
+                - observability
+                - local-path-storage
+      validate:
+        message: "У всех подов должны быть ограничения по ресурсам"
+        pattern:
+          spec:
+            containers:
+              - resources:
+                  limits:
+                    cpu: "?*"
+                    memory: "?*"
+                  requests:
+                    cpu: "?*"
+                    memory: "?*"
+
+    - name: check-images
+      match: 
+        any:
+          - resources:
+              kinds:
+                - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+                - monitoring
+                - observability
+                - local-path-storage
+      validate:
+        message: "Используются только доверенные источники"
+        deny:
+          conditions:
+            any:
+              - key: "{{ images.containers.*.registry }}"
+                operator: AnyNotIn
+                value: ["docker.io", "ghcr.io", ""]
+
+    - name: check-labels
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+                - StatefulSet
+                - DaemonSet
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+                - monitoring
+                - observability
+                - local-path-storage
+      validate:
+        message: "Все поды должны иметь метки app, team"
+        pattern:
+          spec:
+            template:
+              metadata:
+                labels:
+                  app: "?*"
+                  team: "?*"
+    
+    - name: deny-privileged
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+                - monitoring
+                - observability
+                - local-path-storage
+      validate:
+        message: "Нельзя давать privileged контейнерам"
+        deny:
+          conditions:
+            any:
+              - key: "{{ request.object.spec.containers[].securityContext.privileged || `false` }}"
+                operator: AnyIn
+                value: [true]
+
+    - name: deny-host-access
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+                - monitoring
+                - observability
+                - local-path-storage
+      validate:
+        message: "Нельзя иметь доступ к хосту"
+        deny:
+          conditions:
+            any:
+              - key: "{{ request.object.spec.hostNetwork || `false` }}"
+                operator: Equals
+                value: true
+              - key: "{{ request.object.spec.hostPID || `false` }}"
+                operator: Equals
+                value: true
+              - key: "{{ length(request.object.spec.volumes[?hostPath] || `[]`) }}"
+                operator: GreaterThan
+                value: 0

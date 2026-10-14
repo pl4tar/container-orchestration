@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-host-access
+  namespace: default
+  labels:
+    app: bad
+    team: qa
+spec:
+  hostNetwork: true
+  containers:
+    - name: c
+      image: nginx:1.27
+      resources:
+        limits:
+          cpu: "100m"
+          memory: "64Mi"
+        requests:
+          cpu: "100m"
+          memory: "64Mi"

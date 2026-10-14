@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bad-no-labels
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bad            # ← selector совпадает с template.labels
+  template:
+    metadata:
+      labels:
+        app: bad          # ← app есть, а team — нет
+    spec:
+      containers:
+        - name: c
+          image: nginx:1.27
+          resources:
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
