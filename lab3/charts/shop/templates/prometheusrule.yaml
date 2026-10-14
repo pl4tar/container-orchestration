@@ -1,0 +1,44 @@
+{{- if .Values.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Release.Name }}-alerts
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "shop.labels" . | nindent 4 }}
+    release: kube-prom
+spec:
+  groups:
+    - name: shop.rules
+      rules:
+        - alert: ShopApiUnavailable
+          expr: |
+            kube_deployment_status_replicas_available{namespace="shop", deployment="shop-api"}
+            <
+            kube_deployment_spec_replicas{namespace="shop", deployment="shop-api"}
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "shop-api: доля 5xx выше 5%"
+            description: "Пользователи получают ошибки на более чем 5% запросов."
+        - alert: ShopWorkerCrashLooping
+          expr: |
+            increase(kube_pod_container_status_restarts_total{namespace="shop", container="worker"}[10m]) > 3
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "shop-worker: контейнер перезапускается"
+            description: "Контейнер worker перезапустился больше 3 раз за 10 минут — заказы могут копиться необработанными."
+
+        - alert: ShopPostgresNotReady
+          expr: |
+            kube_pod_status_ready{namespace="shop", pod=~"shop-postgres-.*", condition="true"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "shop-postgres не готов"
+            description: "Pod Postgres не проходит readiness — api/worker не могут подключиться к БД."
+{{- end }}

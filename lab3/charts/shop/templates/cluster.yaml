@@ -1,0 +1,14 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ .Release.Name }}-postgres
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "shop.labels" . | nindent 4 }}
+    {{- with .Values.postgres.extraLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  instances: {{ .Values.postgres.instances }}
+  storage:
+    size: {{ .Values.postgres.storage.size }}

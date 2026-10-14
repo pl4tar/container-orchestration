@@ -21,6 +21,14 @@ spec:
                 - monitoring
                 - observability
                 - local-path-storage
+                - cnpg-system
+          - resources:
+              selector:
+                matchLabels:
+                  cnpg.io/cluster: shop-postgres
+          - resources:
+              kinds:
+                - Job
       validate:
         message: "У всех подов должны быть ограничения по ресурсам"
         pattern:
@@ -49,6 +57,14 @@ spec:
                 - monitoring
                 - observability
                 - local-path-storage
+                - cnpg-system
+          - resources:
+              selector:
+                matchLabels:
+                  cnpg.io/cluster: shop-postgres
+          - resources:
+              kinds:
+                - Job
       validate:
         message: "Используются только доверенные источники"
         deny:
@@ -75,6 +91,14 @@ spec:
                 - monitoring
                 - observability
                 - local-path-storage
+                - cnpg-system
+          - resources:
+              selector:
+                matchLabels:
+                  cnpg.io/cluster: shop-postgres
+          - resources:
+              kinds:
+                - Job
       validate:
         message: "Все поды должны иметь метки app, team"
         pattern:
@@ -100,6 +124,14 @@ spec:
                 - monitoring
                 - observability
                 - local-path-storage
+                - cnpg-system
+          - resources:
+              selector:
+                matchLabels:
+                  cnpg.io/cluster: shop-postgres
+          - resources:
+              kinds:
+                - Job
       validate:
         message: "Нельзя давать privileged контейнерам"
         deny:
@@ -124,6 +156,14 @@ spec:
                 - monitoring
                 - observability
                 - local-path-storage
+                - cnpg-system
+          - resources:
+              selector:
+                matchLabels:
+                  cnpg.io/cluster: shop-postgres
+          - resources:
+              kinds:
+                - Job
       validate:
         message: "Нельзя иметь доступ к хосту"
         deny:

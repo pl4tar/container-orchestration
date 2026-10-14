@@ -8,8 +8,37 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"lab3/internal/db"
+)
+
+var (
+	// httpRequestsTotal — счётчик всех HTTP-запросов с разбивкой по методу, пути и статусу.
+	// По нему считаем rate() и долю 5xx (RED: rate + errors).
+	httpRequestsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "http_requests_total",
+			Help: "Total number of HTTP requests.",
+		},
+		[]string{"method", "path", "status"},
+	)
+
+	// httpRequestDuration — гистограмма времени ответа.
+	// По ней считаем p95 через histogram_quantile (RED: duration).
+	httpRequestDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "http_request_duration_seconds",
+			Help:    "HTTP request duration in seconds.",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"method", "path"},
+	)
 )
 
 func main() {
@@ -28,15 +57,43 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/health", healthHandler)
-	mux.HandleFunc("/order", createOrderHandler(database))
-	mux.HandleFunc("/orders", listOrdersHandler(database))
+	// /metrics не инструментируем: иначе он сам себя считает и раздувает кардинальность.
+	mux.Handle("/metrics", promhttp.Handler())
+	// Бизнес-эндпоинты — оборачиваем в instrument, чтобы считались метрики.
+	mux.Handle("/health", instrument(http.HandlerFunc(healthHandler)))
+	mux.Handle("/order", instrument(createOrderHandler(database)))
+	mux.Handle("/orders", instrument(listOrdersHandler(database)))
 
 	slog.Info("api listening", "addr", ":8080")
 	if err := http.ListenAndServe(":8080", mux); err != nil {
 		slog.Error("server failed", "err", err)
 		os.Exit(1)
 	}
+}
+
+// instrument — middleware, который измеряет длительность запроса и пишет
+// метрики http_requests_total и http_request_duration_seconds.
+func instrument(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		rec := &statusRecorder{ResponseWriter: w, status: 200}
+		next.ServeHTTP(rec, r)
+		duration := time.Since(start).Seconds()
+		httpRequestsTotal.WithLabelValues(r.Method, r.URL.Path, strconv.Itoa(rec.status)).Inc()
+		httpRequestDuration.WithLabelValues(r.Method, r.URL.Path).Observe(duration)
+	})
+}
+
+// statusRecorder перехватывает WriteHeader, чтобы запомнить фактический статус ответа.
+// Без него middleware не знает, что вернул хендлер.
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *statusRecorder) WriteHeader(code int) {
+	r.status = code
+	r.ResponseWriter.WriteHeader(code)
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {

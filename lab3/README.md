@@ -1,10 +1,8 @@
 # Лаба 3 — Платформа для shop
 
-<!--
-Краткое введение: что делаем в этой лабе и зачем.
-Пара предложений: ограждения политикой, Helm-чарт shop, Postgres через оператора,
-проверка устойчивости при падении control plane, мониторинг поверх стека из Лабы 2.
--->
+Так, будем баловаться сначала с правилами на входе в api сервер кластера, потом создадим чарт для наших сервисов, который будет соответствовать правилам. Потом заведем postgres через оператора и будем долго все это пытаться сломать хихихи
+
+<img src="images/gf2rcuji.jpg" width="300" alt="mem"> 
 
 ## Содержание
 
@@ -33,7 +31,6 @@
 **Переменные окружения:**
 - `DATABASE_URL` — строка подключения к Postgres
 - `HEALTH_FAIL` — только для `api`, ломает readiness (нужно в части 2)
-
 
 ---
 
@@ -77,11 +74,11 @@ shop-guardrails   true        true         True    65m   Ready
 
 Пробуем их применить и получаем ошибку от kyverno
 
-<img src="images/part1/1limits.png" width="600" alt="отсутсвие лимитов">
-<img src="images/part1/2images.png" width="600" alt="недоверенный источник образов">
-<img src="images/part1/3labels.png" width="600" alt="нет метки team">
-<img src="images/part1/4priv.png" width="600" alt="запуск в привилегированном режиме">
-<img src="images/part1/5host.png" width="600" alt="есть доступ к хосту">
+<img src="images/part1/1limits.png" width="700" alt="отсутсвие лимитов">\
+<img src="images/part1/2images.png" width="700" alt="недоверенный источник образов">\
+<img src="images/part1/3labels.png" width="700" alt="нет метки team">\
+<img src="images/part1/4priv.png" width="700" alt="запуск в привилегированном режиме">\
+<img src="images/part1/5host.png" width="700" alt="есть доступ к хосту">
 
 ---
 
@@ -89,10 +86,7 @@ shop-guardrails   true        true         True    65m   Ready
 
 ### Структура чарта
 
-<!--
-Перечисли файлы: Chart.yaml, values.yaml, templates/deployment-api.yaml,
-templates/deployment-worker.yaml, templates/service-api.yaml, _helpers.tpl.
--->
+Для начала создали нужные файлы для ямликов и шаблонов, и там прописали все по тз
 
 ```
 charts/shop/
@@ -105,154 +99,115 @@ charts/shop/
     ├── service-api.yaml
     └── ...
 ```
+- Chart - всякая инфа про чарт, там version это версия чарта, appVersion это версия приложения
+- values - параметры для api и worker: реплики, образы, ресурсы, метки, healthFail
+- templates/_helpers.tpl - общие метки (shop.labels) и селекторные (shop.{api/worker}.selectorLabels).
+- templates/deployment-api, deployment-worker - деплойменты с readiness/liveness пробами на /health, лимитами, метками app и team (требование политик из части 1)
+- templates/service-api - Service для api, Worker Service не нужен - он не слушает порт
 
-### Что заложено в шаблоны под правила из части 1
-
-<!--
-Явно свяжи: каждое правило из части 1 отражено в шаблонах. Иначе почему
-установка проходит без отклонений.
-Например: resources обязательны → values.schema.json или дефолт в values;
-образ из доверенного реестра → value image.repository с префиксом;
-метки → helpers-функция commonLabels.
--->
-
-<!-- TODO: таблица или список -->
+Все установили, kyverno нам ниче не сказал, вот и славно
 
 ### Установка
 
+По идее все должно было быть хорошо, запустили наш чарт
+
 ```bash
-# TODO: helm install shop ./charts/shop -n shop --create-namespace
+helm install shop ./charts/shop -n shop --create-namespace
 ```
 
-<!-- TODO: скрин — kubectl get pods -n shop (api x3, worker x2) -->
+Создались наши 3 апи и 2 воркера, но они все ушли в CrashLoopBackOff, так как им нужна бд для запуска. Тут было решено перенскочить на 3 часть, поднять бд, чтобы все работало и вернуться сюда.
+
+Так вот, после добаления бд, видим, что все работает, значит ща будем издеваться над ними
+
+<img src="images/part2/1runpods.png" width="600" alt="поды работают">
 
 ### Reconciliation: ручное удаление пода
 
-<!--
-Удалить под api руками → вернулся (ReplicaSet заметил несоответствие
-и создал новый). Приложи последовательность команд и вывод.
--->
+Пробуем удалить один из подов с апи и тут же создается новый, магия какая-то ;D
 
 ```bash
-# TODO: kubectl delete pod ..., kubectl get pods -w
+kubectl delete pod ..., kubectl get pods -w
 ```
 
-<!-- TODO: скрин — под исчез и вернулся -->
+<img src="images/part2/2deletepod.png" width="1000" alt="поды работают">
 
 ### Reconciliation: изменение replicas через helm upgrade
 
-<!--
-Поменять replicas в values.yaml, helm upgrade → Deployment обновлён,
-ReplicaSet догнал новое число подов.
--->
+Тут пробуем поменять количество реплик подов для апишки с 3 на 5 и апдейтнуть, все замечательно, все 5 подов есть
 
-```bash
-# TODO
-```
+<img src="images/part2/3skalepods.png" width="1000" alt="поды работают">
 
-<!-- TODO: скрин — kubectl get pods после апгрейда -->
+Таким же образом меняем количество реплик обратно на 3 и видим как удаляются 2 новых пода, созданных при скейле, так сделано специально, так как старые поды типо крутые, давно работают и без проблем, дедовщина какая-то
+
+<img src="images/part2/4unskalepods.png" width="1000" alt="поды работают">
 
 ### Rolling update без потерь
 
-<!--
-Обновить версию образа, одновременно долбить /health в цикле.
-Показать, что ни один запрос не провалился и поды обновляются по одному
-(maxSurge/maxUnavailable из Deployment strategy).
--->
+Тута создадим новый образ наших приложений, т.е. просто поставим новый тег `v2` и будем выкатывать их как будто они новые \
+При нашем rolling update происходит такая логика: 
 
-```bash
-# TODO: команда фонового цикла curl /health + helm upgrade
-```
+Есть maxSurge - сколько доп подов можно создать сверх текущих реплик (25%) с округлением вверх, т.е. у нас создается 1 доп под, 
 
-<!-- TODO: скрин — вывод цикла curl (0 ошибок) + kubectl rollout status -->
+А так же maxUnavailable - сколько подов можно убрать из готовых (25%), т.е. мы должны иметь не менее 3 готовых подов. Это можно проследить в нашем эксперименте 
+
+Одновременно с выкаткой, долбим /health в цикле и смотрим, чтобы ни один запрос не вернул ошибку
+
+<img src="images/part2/5v2images.png" width="1000" alt="поды работают"> \
+<img src="images/part2/6rolloutgood.png" width="1000" alt="поды работают"> 
+
+Итого новые поды есть, почти все запросы вернули 200 (почему то один вернул код 000 спустя 2 минуты ожидания, это ошибка вероятно случилась из-за race condition между удалением пода и обновлением iptables), но глобально все круто
 
 ### Сломанный rollout и rollback
 
-<!--
-Выставить HEALTH_FAIL=true → новые поды не проходят readiness → rollout
-зависает, старые исправные остаются. Показать, что /health продолжает
-отвечать. Затем helm rollback → кластер вернулся.
--->
+Теперь пробуем сделать почти то же самое, только делаем так, чтобы наш /health возвращал 503 код, выставляем HEALTH_FAIL=true, и пробуем, так же с запросами на этот эндпоинт, чтобы посмотреть, что новые поды не выкатываются
 
-```bash
-# TODO
-```
+Видим, что все запросы вернули код 200, rollout завис, новый под рестартится (не проходит liveness) и не может пройти readyness пробу \
+Делаем rollback, новый под умирает и мы ниче не выкатили, все правильно
 
-<!-- TODO: скрин — rollout завис, старые поды живы, /health отвечает -->
-<!-- TODO: скрин — helm rollback и успешный возврат -->
+<img src="images/part2/7rolloutbad.png" width="1000" alt="поды работают"> 
 
 ---
 
 ## Часть 3 — Postgres через оператора
 
-### Выбор оператора
+### Выбор и установка оператора
 
-<!--
-CloudNativePG или Zalando. Кратко: почему выбрал, что даёт оператор
-(самостоятельно поднимает поды БД, следит за репликацией, бэкапами и т.д.)
--->
-
-**Оператор:** <!-- CloudNativePG / Zalando -->
-
-**Почему:** <!-- 2–4 предложения -->
-
-### Установка оператора
+Выбрали CloudNativePG, он вроде как легче, этого уже хватило
 
 ```bash
-# TODO: helm repo add ... && helm install ...
+helm install cnpg cnpg/cloudnative-pg -n cnpg-system
 ```
-
-<!-- TODO: скрин — поды оператора в Running -->
 
 ### Объект БД в чарте
 
-<!--
-В чарте shop появился шаблон templates/cluster.yaml (или подобное) с CRD
-оператора. Это значит: чарт сам декларирует "хочу Postgres", а оператор
-материализует StatefulSet, Service, Secret и т.д.
--->
+Оператор установлен, далее:
 
-```yaml
-# TODO: фрагмент шаблона cluster.yaml
-```
+В чарте добавили cluster.yaml с объектом Cluster от CloudNativePG с одним инстансом.
+В values добавили секцию postgres\
+Нужно было создать env переменную DATABASE_URL, которая бы передалась нашим приложениям для соединения с бд. \
+В deployment-api и deployment-worker добавили env с DATABASE_URL, который достается из Secret shop-postgres-app, ключ uri (оператор генерирует его сам при создании кластера)
 
-### Reconciliation: ручное удаление пода postgres
+Оператор сам материализовал декларацию в набор объектов:
 
-<!--
-Удалить под, оператор вернул. Сравни поведение с ReplicaSet: чем
-оператор отличается от "просто контроллера Deployment".
--->
+- StatefulSet shop-postgres с подом Postgres.
+- Service shop-postgres-rw (primary, read-write), -ro (read-only реплики), -r (любая нода). Api/worker подключаются к -rw через DSN из Secret.
+- Secret shop-postgres-app (пользователь app, готовый DSN) и shop-postgres-superuser.
+- PVC shop-postgres-1 с 1 Gi.
 
-```bash
-# TODO
-```
+пробуем удалить под postgres вручную и видим, что через некоторое время он запускается заново
 
-<!-- TODO: скрин — под удалён и возвращён оператором -->
+<img src="images/part3/1deletepostgres.png" width="800" alt="поды работают"> 
 
-### `spec` и `status` объекта Cluster
+Это работа StatefulSet'а (встроенного контроллера), но оператор следит за статусом кластера через Cluster.status — если бы потерялся сам StatefulSet, оператор бы его пересоздал
 
-<!--
-kubectl get cluster -o yaml → приведи ключевые поля spec и status.
--->
+**spec и status:**
 
-**`spec`** содержит желаемое: <!-- версия Postgres, число инстансов, ресурсы, storage, бэкапы -->
+Тут особо ничего непонятно, но вот что я понял с того, что мне написал чатик:
 
-**`status`** содержит наблюдаемое: <!-- текущие инстансы, primary, ready, условия -->
+в спеке видно то, что мы задали: кол-во инстансов, размер хранилища, ну и все, добавленное оператором\
+в статусе, неожиданно, находится состояние, особенно обращено внимание на conditions, они показывают, что оператор проверяет не только жив или не жив, есть еще ConsistentSystemID и ContinuousArchiving, конкретно хз зачем это, но у Controller-manager этого нету
 
-### Чем оператор отличается от controller-manager
-
-<!--
-Ключевые тезисы:
-- controller-manager — встроенный компонент Kubernetes, крутит встроенные
-  контроллеры (Deployment, ReplicaSet, StatefulSet и др.) — на "свои" типы.
-- Оператор — паттерн: свой контроллер + CRD. Следит за пользовательским
-  типом (Cluster от CloudNativePG) и умеет доменную логику (failover, бэкапы).
-- Controller-manager generic, оператор — предметно-специфичен.
--->
-
-<!-- TODO: сравнительный текст 5–8 предложений -->
-
-<!-- TODO: скрин — kubectl get cluster -o yaml (фрагмент) -->
+Микро вывод: оператор просто заточен под свой предмет(у нас это postgres), а Controller-manager нужен для управления объектами кубера, он не знает как управлять специфичными объектами
 
 ---
 
@@ -260,137 +215,72 @@ kubectl get cluster -o yaml → приведи ключевые поля spec и
 
 ### Как останавливал control plane
 
-<!--
-Опиши процедуру для kind (docker pause/stop на контейнере ноды, либо
-остановка процесса etcd/apiserver внутри ноды). Для этого нужен доступ
-к container runtime ноды (docker exec / crictl).
--->
+Побалуемся над контол плэйн, чтобы остановить именно etcd, заходим в ноду и внутри убираем манифест с помощью `mv`
 
 ```bash
-# TODO
+docker exec -it lab2-control-plane bash
+mv /etc/kubernetes/manifests/etcd.yaml /tmp/etcd.yaml.backup
 ```
 
 ### Изменения не проходят
 
-<!--
-Попытка kubectl apply/helm upgrade → отказ, потому что apiserver недоступен
-(или etcd не отвечает). Приложи вывод.
--->
+Пробуем что нибудь сделать, ничего не выходит, все виснет, тяжело думоеца
 
-```bash
-# TODO
-```
-
-<!-- TODO: скрин — ошибка kubectl/helm при лежащем control plane -->
+<img src="images/part4/1failedreq.png" width="800" alt="ниче не работает"> 
 
 ### Приложение продолжает отвечать
 
-<!--
-/health, /orders продолжают работать. Почему: kubelet на ноде продолжает
-держать контейнеры (их некому останавливать), endpoints уже закэшированы
-в kube-proxy, etcd не нужен для обслуживания уже созданных подов.
--->
+Чтобы проверить работу подов, которые были запущены до поломки, внутри ноды ищем нужный контейнер с апишкой, кидаем ему запросы, оопаааа, отвечает, значит живой
 
 ```bash
-# TODO: curl /health и /orders
+root@lab2-control-plane:/# crictl exec e6eb50c0f1786 wget -qO- http://shop-api.shop/health
+ok
+root@lab2-control-plane:/# crictl exec e6eb50c0f1786 wget -qO- http://shop-api.shop/orders
+[{"id":3,"payload":"third","processed":true,"created_at":"2026-10-14T13:15:16.157557Z","processed_at":"2026-10-14T13:15:17.06748Z"},{"id":2,"payload":"second","processed":true,"created_at":"2026-10-14T13:14:01.982182Z","processed_at":"2026-10-14T13:14:02.067268Z"},{"id":1,"payload":"first","processed":true,"created_at":"2026-10-14T13:13:56.195944Z","processed_at":"2026-10-14T13:13:57.067377Z"}]
 ```
-
-<!-- TODO: скрин — успешный ответ от api при лежащем CP -->
 
 ### Восстановление
 
-<!--
-Вернуть control plane → kubectl снова отвечает, cluster снова управляем.
--->
+Вернем манифест etcd на место, все снова работает, все рады
 
 ```bash
-# TODO
-```
 
-<!-- TODO: скрин — kubectl get nodes после восстановления -->
+root@lab2-control-plane:/# mv /tmp/etcd.yaml.backup /etc/kubernetes/manifests/etcd.yaml
+root@lab2-control-plane:/# crictl ps | grep etcd
+898a3b3f582bb       5f1f5298c888d       33 seconds ago      Running           etcd          0          58f559d0a25d2       etcd-lab2-control-plane             kube-system
+```
 
 ---
 
 ## Часть 5 — Мониторинг
 
-<!--
-Используем стек из Лабы 2 — ничего нового не поднимаем.
-В чарт добавляем ServiceMonitor (скрейп /metrics) и PrometheusRule (3 алерта).
--->
+Используем стек из Лабы 2 
+В чарт добавляем ServiceMonitor (скрейп /metrics) и PrometheusRule (3 алерта)
 
-### ServiceMonitor
-
-<!--
-api отдаёт /metrics? Если нет — добавь (в части 0 код не включает метрики,
-но их можно взять из Лабы 2 или дописать). ServiceMonitor ссылается на
-Service shop с label app=api.
--->
-
-```yaml
-# TODO: фрагмент templates/servicemonitor.yaml
-```
+Добавили /metrics в апишку, теперь ServiceMonitor будет что поскрейпить
 
 ### Три алерта
 
-<!--
-Выбрать 3 правила. Каждое обосновать: что ловит, чем грозит пользователю,
-что делать дежурному. Примеры: api недоступен, доля 5xx у api, worker
-не обрабатывает заказы дольше N минут.
--->
+<img src="images/part5/1alerts.png" width="800" alt="алерты"> 
 
-**Алерт 1: `<name>`**
-- Метрика / выражение: <!-- PromQL -->
-- Что ловит: <!-- одна фраза -->
-- Чем грозит: <!-- боль пользователя -->
-- Что делать: <!-- действия дежурного -->
+**Алерт 1: `ShopApiUnavailable`**
+- Что ловит: у Deployment api доступных реплик меньше, чем задано в spec
 
-**Алерт 2: `<name>`**
-- ...
+вызвал, задав replicaCount: 5 и healthFail: false
 
-**Алерт 3: `<name>`**
-- ...
+**Алерт 2: `ShopWorkerCrashLooping`**
+- **Что ловит:** контейнер worker перезапускается больше 3 раз за 10 минут — crash loop или частая деградация.
 
-```yaml
-# TODO: фрагмент templates/prometheusrule.yaml
-```
+тут было сложнее всего, ждать особенно, поудалял несколько раз воркеры и вуаля
 
-### Провокация firing
+**Алерт 3: `ShopPostgresNotReady`**
+- **Что ловит:** pod Postgres не проходит readiness — база не принимает подключения
 
-<!--
-Спровоцировать хотя бы одно правило, показать firing в Prometheus UI
-и (опционально) уведомление в Telegram/Alertmanager.
--->
+вырубил базу, быстро все сработало
 
-```bash
-# TODO: как провоцировал
-```
+<img src="images/part5/2first.png" width="800" alt="первый алерт firing"> 
+<img src="images/part5/3third.png" width="800" alt="третий алерт firing"> 
+<img src="images/part5/4second.png" width="800" alt="второй и третий алерт firing"> 
 
-<!-- TODO: скрин — Prometheus Rules: алерт в Firing -->
-<!-- TODO: скрин — Alertmanager / Karma: алерт виден -->
-<!-- TODO: скрин (опционально) — Telegram уведомление -->
 
----
-
-## Итог
-
-<!--
-Короткое резюме: всё, что требовалось по заданию, работает.
-Сквозная проверка: чарт ставится с нуля, поды возвращаются сами, control
-plane падает — приложение живо, алерты firing.
--->
-
-<!-- TODO: сквозной чек-лист по "Результат" из lab.md -->
-
----
-
-## Что было неочевидным / на чём застревал
-
-<!--
-Полезно для отчёта: список граблей. Например:
-- как отключить поведение Kyverno в specific namespace
-- как настроить readiness probe так, чтобы rollout действительно завис
-- как провернуть безопасно остановку etcd в kind
-- почему Helm upgrade при лежащем CP показывает странную ошибку
--->
-
-<!-- TODO: 3–5 пунктов -->
+<img src="images/gosl.jpg" width="500" alt="mem"> 
