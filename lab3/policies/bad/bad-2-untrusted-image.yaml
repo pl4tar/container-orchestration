@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-untrusted-image
+  namespace: default
+  labels:
+    app: bad
+    team: qa
+spec:
+  containers:
+    - name: c
+      image: quay.io/random/whatever:latest     # реестр не в whitelist
+      resources:
+        limits:
+          cpu: "100m"
+          memory: "64Mi"
+        requests:
+          cpu: "100m"
+          memory: "64Mi"
