@@ -1,0 +1,80 @@
+# Нагрузка на путь заказа: k6 внутри кластера бьёт POST /order через Service shop-api.
+# Внутри кластера, а не через port-forward с мака: port-forward идёт через apiserver
+# и kubelet, сам становится узким местом и искажает задержки.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: k6-order
+  namespace: shop
+data:
+  order.js: |
+    import http from 'k6/http';
+    import { check } from 'k6';
+
+    // RATE и DURATION задаются через env Job, чтобы менять нагрузку без правки скрипта.
+    export const options = {
+      scenarios: {
+        orders: {
+          // Открытая модель: k6 держит заданный RPS независимо от того, как быстро отвечает api.
+          // Закрытая (N VU в цикле) сама сбавила бы темп при деградации и спрятала бы её.
+          executor: 'constant-arrival-rate',
+          rate: Number(__ENV.RATE || 30),
+          timeUnit: '1s',
+          duration: __ENV.DURATION || '30m',
+          preAllocatedVUs: 20,
+          maxVUs: 60,
+        },
+      },
+      summaryTrendStats: ['avg', 'p(50)', 'p(95)', 'p(99)', 'max'],
+    };
+
+    export default function () {
+      const res = http.post(
+        'http://shop-api.shop/order',
+        JSON.stringify({ payload: `k6-${__VU}-${__ITER}` }),
+        { headers: { 'Content-Type': 'application/json' }, timeout: '5s' },
+      );
+      check(res, { 'status 201': (r) => r.status === 201 });
+    }
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: k6-order
+  namespace: shop
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: load-test
+        team: shop
+    spec:
+      restartPolicy: Never
+      # Генератор нагрузки сажаем на worker: на control-plane запас до eviction самый маленький.
+      nodeSelector:
+        kubernetes.io/hostname: lab4-worker
+      containers:
+        - name: k6
+          image: grafana/k6:1.0.0
+          args: ["run", "/scripts/order.js"]
+          env:
+            - name: RATE
+              value: "30"
+            - name: DURATION
+              value: "15m"
+          resources:
+            requests:
+              cpu: 200m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 256Mi
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+      volumes:
+        - name: scripts
+          configMap:
+            name: k6-order

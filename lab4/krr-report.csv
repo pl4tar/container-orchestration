@@ -1,0 +1,39 @@
+
+ _____       _               _          _  _______  _____
+|  __ \     | |             | |        | |/ /  __ \|  __ \
+| |__) |___ | |__  _   _ ___| |_ __ _  | ' /| |__) | |__) |
+|  _  // _ \| '_ \| | | / __| __/ _` | |  < |  _  /|  _  /
+| | \ \ (_) | |_) | |_| \__ \ || (_| | | . \| | \ \| | \ \
+|_|  \_\___/|_.__/ \__,_|___/\__\__,_| |_|\_\_|  \_\_|  \_\
+
+
+Thanks for using Robusta KRR. If you have any questions or feedback, please feel free to reach out to us at
+https://github.com/robusta-dev/krr/issues
+
+Watch our latest video to optimize your workloads and save costs: https://www.youtube.com/watch?v=TYRA2QcDIuI
+
+
+
+Running Robusta's KRR (Kubernetes Resource Recommender) v1.28.0
+Using strategy: Simple
+Using formatter: csv
+A newer version of KRR is available: v1.31.1
+
+[11:33:49] INFO     Using clusters: ['kind-lab4']                                                                    runner.py:446
+           INFO     Prometheus URL is specified, will not auto-detect a metrics service                               loader.py:55
+           INFO     Trying to connect to Prometheus for kind-lab4 cluster                         prometheus_metrics_service.py:71
+           INFO     Using Prometheus at http://localhost:9090 for cluster kind-lab4              prometheus_metrics_service.py:100
+           INFO     Prometheus found                                                                                  loader.py:74
+           INFO     Prometheus connected successfully for kind-lab4 cluster                                           loader.py:47
+           INFO     Listing scannable objects in kind-lab4                                                         __init__.py:104
+[11:33:50] INFO     Calculated recommendations for Job shop/k6-order/k6 (using 4 metrics)                            runner.py:373
+           INFO     Calculated recommendations for Deployment shop/shop-batch/batch (using 4 metrics)                runner.py:373
+           INFO     Calculated recommendations for Deployment shop/shop-worker/worker (using 4 metrics)              runner.py:373
+           INFO     Calculated recommendations for Deployment shop/shop-api/api (using 4 metrics)                    runner.py:373
+           INFO     Result collected, displaying...                                                                  runner.py:510
+Namespace,Name,Pods,Old Pods,Type,Container,Severity,CPU Diff,CPU Requests,CPU Limits,Memory Diff,Memory Requests,Memory Limits
+shop,shop-api,3,0,Deployment,api,WARNING,-195m,(-65m) 100m -> 35m,500m -> unset,+108Mi,(+36Mi) 64Mi -> 100Mi,128Mi -> 100Mi
+shop,shop-batch,1,0,Deployment,batch,WARNING,+401m,(+401m) 100m -> 501m,500m -> unset,-12Mi,(-12Mi) 128Mi -> 116Mi,256Mi -> 116Mi
+shop,shop-worker,2,0,Deployment,worker,WARNING,-180m,(-90m) 100m -> 10m,500m -> unset,+72Mi,(+36Mi) 64Mi -> 100Mi,128Mi -> 100Mi
+shop,k6-order,0,1,Job,k6,WARNING,-0m,(-85m) 200m -> 115m,1.0 -> unset,-0m,(-28Mi) 128Mi -> 100Mi,256Mi -> 100Mi
+

@@ -1,0 +1,16 @@
+{{- if .Values.api.pdb.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ .Release.Name }}-api
+  labels:
+    {{- include "shop.labels" . | nindent 4 }}
+spec:
+  maxUnavailable: {{ .Values.api.pdb.maxUnavailable }}
+  # Под, который и так не Ready, можно выселять всегда:
+  # иначе застрявший в CrashLoop под навсегда заблокирует drain.
+  unhealthyPodEvictionPolicy: AlwaysAllow
+  selector:
+    matchLabels:
+      {{- include "shop.api.selectorLabels" . | nindent 6 }}
+{{- end }}
