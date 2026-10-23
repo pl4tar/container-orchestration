@@ -1,0 +1,29 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: lab4
+
+# Общий конфиг kubelet для обеих нод.
+# Ноды kind видят всю память VM Docker Desktop. Порог eviction в 50% режет
+# allocatable примерно вдвое (allocatable = capacity - reserved - evictionHard)
+# и задаёт точку, где kubelet начнёт выселять поды по давлению памяти.
+# Дисковые пороги kind по умолчанию выключены (0%), оставляем так,
+# иначе на ноутбуке поды будут выселяться из-за диска, а не из-за памяти.
+kubeadmConfigPatches:
+  - |
+    kind: KubeletConfiguration
+    evictionHard:
+      memory.available: "50%"
+      nodefs.available: "0%"
+      nodefs.inodesFree: "0%"
+      imagefs.available: "0%"
+
+nodes:
+  # Снимаем с control-plane taint NoSchedule, чтобы обе ноды принимали рабочие поды.
+  # Иначе из 2 нод рабочей останется одна и разносить api будет некуда.
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          taints: []
+  - role: worker

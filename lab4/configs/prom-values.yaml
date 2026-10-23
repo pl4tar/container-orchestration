@@ -1,0 +1,24 @@
+grafana:
+  adminPassword: admin   # чтобы знать пароль; в проде, конечно, секретом
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      # 256Mi и 512Mi не хватило: Explore поднимает Grafana до ~500 MiB, и она ловит OOMKilled
+      memory: 1Gi
+
+prometheus:
+  prometheusSpec:
+    # чтобы Prometheus видел ServiceMonitor'ы во всех namespace, а не только в своём
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    retention: 2d
+    # Без requests Prometheus был бы BestEffort и под давлением памяти
+    # вылетал бы раньше batch, а заодно терялись бы данные для krr и графиков SLA.
+    resources:
+      requests:
+        cpu: 100m
+        memory: 512Mi
+      limits:
+        memory: 1Gi

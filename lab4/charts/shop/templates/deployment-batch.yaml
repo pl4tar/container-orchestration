@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-batch
+  labels:
+    {{- include "shop.labels" . | nindent 4 }}
+    {{- with .Values.batch.extraLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  replicas: {{ .Values.batch.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "shop.batch.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "shop.batch.selectorLabels" . | nindent 8 }}
+        {{- include "shop.labels" . | nindent 8 }}
+        {{- with .Values.batch.extraLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.batch.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      {{- with .Values.batch.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: batch
+          image: "{{ .Values.batch.image.repository }}:{{ .Values.batch.image.tag }}"
+          imagePullPolicy: {{ .Values.batch.image.pullPolicy }}
+          env:
+            - name: BATCH_CPU_WORKERS
+              value: "{{ .Values.batch.load.cpuWorkers }}"
+            - name: BATCH_MEM_MB
+              value: "{{ .Values.batch.load.memMB }}"
+            - name: BATCH_MEM_STEP_MB
+              value: "{{ .Values.batch.load.memStepMB }}"
+            - name: BATCH_MEM_STEP_SECONDS
+              value: "{{ .Values.batch.load.memStepSeconds }}"
+          resources:
+            {{- toYaml .Values.batch.resources | nindent 12 }}

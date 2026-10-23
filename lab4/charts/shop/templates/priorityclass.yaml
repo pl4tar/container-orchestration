@@ -1,0 +1,13 @@
+{{- range .Values.priorityClasses }}
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: {{ .name }}
+  labels:
+    {{- include "shop.labels" $ | nindent 4 }}
+value: {{ .value }}
+globalDefault: false
+preemptionPolicy: {{ .preemptionPolicy }}
+description: {{ .description | quote }}
+{{- end }}

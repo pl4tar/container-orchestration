@@ -1,0 +1,60 @@
+{{- if .Values.prometheusRule.enabled }}
+{{- $sla := .Values.prometheusRule.sla }}
+{{- $ns := .Release.Namespace }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Release.Name }}-alerts
+  namespace: {{ $ns }}
+  labels:
+    {{- include "shop.labels" . | nindent 4 }}
+    release: kube-prom  
+spec:
+  groups:
+    - name: shop.sla
+      rules:
+        - alert: ShopOrderLatencySLOBreach
+          expr: |
+            (
+              sum(rate(http_request_duration_seconds_bucket{namespace="{{ $ns }}",path="/order",le="{{ $sla.latencySeconds }}"}[5m]))
+              /
+              sum(rate(http_request_duration_seconds_count{namespace="{{ $ns }}",path="/order"}[5m]))
+            ) < {{ $sla.latencyTarget }}
+            and
+            sum(rate(http_request_duration_seconds_count{namespace="{{ $ns }}",path="/order"}[5m])) > 1
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "SLA заказа нарушен: быстрее {{ $sla.latencySeconds }}s меньше {{ $sla.latencyTarget }} заказов"
+            description: {{`"За 5 минут быстрее порога только {{ $value | humanizePercentage }} заказов."`}}
+
+        - alert: ShopOrderErrorBudgetBurn
+          expr: |
+            (
+              sum(rate(http_requests_total{namespace="{{ $ns }}",path="/order",status=~"5.."}[5m]))
+              /
+              sum(rate(http_requests_total{namespace="{{ $ns }}",path="/order"}[5m]))
+            ) > {{ $sla.errorRatio }}
+            and
+            sum(rate(http_requests_total{namespace="{{ $ns }}",path="/order"}[5m])) > 1
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Ошибки на оформлении заказа выше {{ $sla.errorRatio }}"
+            description: {{`"Доля 5xx на POST /order за 5 минут: {{ $value | humanizePercentage }}."`}}
+
+        - alert: ShopCriticalPathCPUThrottled
+          expr: |
+            sum by (pod, container) (rate(container_cpu_cfs_throttled_periods_total{namespace="{{ $ns }}",container=~"api|postgres"}[5m]))
+            /
+            sum by (pod, container) (rate(container_cpu_cfs_periods_total{namespace="{{ $ns }}",container=~"api|postgres"}[5m]))
+            > {{ .Values.prometheusRule.throttleRatio }}
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: {{`"{{ $labels.container }} ({{ $labels.pod }}) упирается в CPU limit"`}}
+            description: {{`"Троттлинг в {{ $value | humanizePercentage }} периодов CFS: limit слишком узкий для всплесков, задержка вырастет раньше, чем видно по среднему CPU."`}}
+{{- end }}
