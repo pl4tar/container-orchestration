@@ -1,0 +1,43 @@
+{{- if .Values.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Release.Name }}-alerts
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "shop.labels" . | nindent 4 }}
+    release: kube-prom  
+spec:
+  groups:
+    - name: shop.network
+      rules:
+        - alert: ShopHighDropRate
+          expr: |
+            sum(rate(cilium_drop_count_total{reason="Policy denied"}[1m])) > 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "NetworkPolicy блокирует трафик в shop"
+            description: "Обнаружены пакеты, отклонённые политикой (Policy denied). Проверьте NetworkPolicy и Hubble."
+
+        - alert: ShopTcpAborts
+          expr: |
+            sum(rate(cilium_tcp_connection_aborted_total{namespace="{{ .Release.Namespace }}"}[1m])) > 0
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Обрывы TCP-соединений в shop"
+            description: {{`"Зафиксированы аварийные закрытия TCP-соединений. Возможно, проблема с сетью или базой данных."`}}
+
+        - alert: ShopDnsServerFail
+          expr: |
+            sum(rate(coredns_dns_responses_total{rcode="SERVFAIL"}[1m])) > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Сбои DNS (SERVFAIL)"
+            description: {{`"CoreDNS не может разрешить имена. Приложения потеряют связность. Проверьте состояние CoreDNS."`}}
+{{- end }}

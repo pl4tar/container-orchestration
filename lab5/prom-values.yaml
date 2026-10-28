@@ -1,0 +1,15 @@
+grafana:
+  adminPassword: admin   # чтобы знать пароль; в проде, конечно, секретом
+prometheus:
+  prometheusSpec:
+    # чтобы Prometheus видел ServiceMonitor'ы во всех namespace, а не только в своём
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+
+alertmanager:
+  alertmanagerSpec:
+    alertmanagerConfigSelector:
+      matchLabels:
+        alertmanagerConfig: telegram
+    alertmanagerConfigMatcherStrategy:
+      type: None

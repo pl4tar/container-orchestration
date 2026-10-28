@@ -1,0 +1,91 @@
+priorityClasses:
+  - name: shop-critical
+    value: 100000
+    preemptionPolicy: PreemptLowerPriority
+    description: "Критический путь заказа: api, postgres"
+
+api:
+  replicaCount: 3
+  image:
+    repository: lab3-api
+    tag: v3
+    pullPolicy: IfNotPresent
+  service:
+    port: 80
+    targetPort: 8080
+    type: NodePort
+  priorityClassName: shop-critical
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "100Mi"
+    limits:
+      cpu: "250m"
+      memory: "100Mi"
+  pdb:
+    enabled: true
+    maxUnavailable: 1
+  healthFail: false            
+  extraLabels:
+    team: shop
+  spread:
+    mode: topologySpread
+    topologyKey: kubernetes.io/hostname
+    maxSkew: 1
+    whenUnsatisfiable: DoNotSchedule 
+    antiAffinityType: preferred
+  
+
+worker:
+  replicaCount: 2
+  image:
+    repository: lab3-worker
+    tag: v2
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: "10m"      
+      memory: "100Mi"   
+    limits:
+      cpu: "500m"
+      memory: "100Mi"
+  extraLabels:
+    team: shop
+
+postgres:
+  instances: 1
+  storage:
+    size: 1Gi
+  priorityClassName: shop-critical
+  enablePDB: true
+  resources:
+    requests:
+      cpu: "1"
+      memory: "384Mi"   # 189Mi (krr за 30 мин) не хватило: OOMKilled, когда таблица выросла
+    limits:
+      cpu: "1"
+      memory: "384Mi"
+  extraLabels:
+    team: shop
+
+serviceMonitor:
+  enabled: false
+
+prometheusRule:
+  enabled: false
+  sla:
+    latencySeconds: "0.1"
+    latencyTarget: 0.95
+    errorRatio: 0.01
+  throttleRatio: 0.25
+
+dashboard:
+  enabled: true
+
+networkPolicies:
+  dns:
+    enabled: true
+    port: 53
+  postgres:
+    port: 5432
+    allowedApiLabel: "api"

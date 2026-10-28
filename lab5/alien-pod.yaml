@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: alien
+  namespace: shop
+  labels:
+    app: alien
+spec:
+  restartPolicy: Never
+  containers:
+    - name: alien
+      image: alpine:3.22
+      command: ["sleep", "3600"]
