@@ -1,0 +1,13 @@
+{{- if .Values.dashboard.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-dashboard
+  labels:
+    {{- include "shop.labels" . | nindent 4 }}
+    # по этой метке sidecar Grafana находит ConfigMap и кладёт JSON в provisioning
+    grafana_dashboard: "1"
+data:
+  shop-sla.json: |-
+    {{- .Files.Get "dashboards/shop-sla.json" | nindent 4 }}
+{{- end }}

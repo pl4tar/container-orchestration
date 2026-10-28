@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: load-client
+  namespace: shop
+  labels:
+    app: load-client
+spec:
+  restartPolicy: Never
+  containers:
+    - name: curl
+      image: curlimages/curl:8.10.1
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits: { cpu: 100m, memory: 32Mi }
+      command:
+        - sh
+        - -c
+        - |
+          success=0
+          fail=0
+          for i in $(seq 1 600); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 http://shop-api/health)
+            if [ "$code" = "200" ]; then
+              success=$((success+1))
+            else
+              fail=$((fail+1))
+              echo "[$(date +%T)] req=$i code=$code (FAILED)"
+            fi
+            sleep 0.2
+          done
+          echo "=========================="
+          echo "TOTAL: $success OK, $fail FAILED"
