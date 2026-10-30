@@ -1,0 +1,109 @@
+{{- range $version, $cfg := .Values.api.versions }}
+{{- if $cfg.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $.Release.Name }}-api-{{ $version }}
+  labels:
+    version: {{ $version }}
+    {{- include "shop.labels" $ | nindent 4 }}
+    {{- with $.Values.api.extraLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  replicas: {{ $.Values.api.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "shop.api.selectorLabels" $ | nindent 6 }}
+      version: {{ $version }}
+  template:
+    metadata:
+      labels:
+        {{- include "shop.api.selectorLabels" $ | nindent 8 }}
+        version: {{ $version }}
+        {{- include "shop.labels" $ | nindent 8 }}
+        {{- with $.Values.api.extraLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- if $.Values.api.mesh.enabled }}
+      annotations:
+        linkerd.io/inject: enabled
+        config.linkerd.io/default-inbound-policy: {{ $.Values.api.mesh.inboundPolicy }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ $.Release.Name }}-api
+      {{- with $.Values.api.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      {{- with $.Values.api.spread }}
+      {{- if eq .mode "topologySpread" }}
+      topologySpreadConstraints:
+        - maxSkew: {{ .maxSkew }}
+          topologyKey: {{ .topologyKey }}
+          whenUnsatisfiable: {{ .whenUnsatisfiable }}
+          nodeTaintsPolicy: Honor
+          labelSelector:
+            matchLabels:
+              {{- include "shop.api.selectorLabels" $ | nindent 14 }}
+          matchLabelKeys:
+            - pod-template-hash
+      {{- else if eq .mode "antiAffinity" }}
+      affinity:
+        podAntiAffinity:
+          {{- if eq .antiAffinityType "required" }}
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: {{ .topologyKey }}
+              labelSelector:
+                matchLabels:
+                  {{- include "shop.api.selectorLabels" $ | nindent 18 }}
+          {{- else }}
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: {{ .topologyKey }}
+                labelSelector:
+                  matchLabels:
+                    {{- include "shop.api.selectorLabels" $ | nindent 20 }}
+          {{- end }}
+      {{- end }}
+      {{- end }}
+      containers:
+        - name: api
+          image: "{{ $.Values.api.image.repository }}:{{ $.Values.api.image.tag }}"
+          imagePullPolicy: {{ $.Values.api.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: VERSION
+              value: {{ $version | quote }}
+            - name: FAIL
+              value: "{{ $cfg.fail | default false }}"
+            - name: FLAKY
+              value: "{{ $cfg.flaky | default false }}"
+            - name: FLAKY_RATE
+              value: {{ $.Values.api.flakyRate | quote }}
+            - name: HEALTH_FAIL
+              value: "{{ $.Values.api.healthFail }}"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Release.Name }}-postgres-app
+                  key: uri
+          resources:
+            {{- toYaml $.Values.api.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+{{- end }}
+{{- end }}

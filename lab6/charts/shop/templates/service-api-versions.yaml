@@ -1,0 +1,23 @@
+{{- /* Свой Service на версию: backendRefs маршрута ссылаются на Service, а не на поды.
+Метки app: api здесь нет, иначе ServiceMonitor скрейпил бы каждый под дважды. */ -}}
+{{- range $version, $cfg := .Values.api.versions }}
+{{- if $cfg.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $.Release.Name }}-api-{{ $version }}
+  labels:
+    version: {{ $version }}
+    {{- include "shop.labels" $ | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "shop.api.selectorLabels" $ | nindent 4 }}
+    version: {{ $version }}
+  ports:
+    - name: http
+      port: {{ $.Values.api.service.port }}
+      targetPort: {{ $.Values.api.service.targetPort }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,24 @@
+{{- if .Values.api.mesh.enabled }}
+# Метрики прокси отдаёт сам прокси на порту linkerd-admin. Метки deployment и version
+# в метриках нет, поэтому берём их из меток пода: по ним считаются доли версий.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ .Release.Name }}-linkerd-proxy
+  labels:
+    {{- include "shop.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchExpressions:
+      - key: linkerd.io/control-plane-ns
+        operator: Exists
+  podMetricsEndpoints:
+    - port: linkerd-admin
+      path: /metrics
+      interval: 10s
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_label_linkerd_io_proxy_deployment]
+          targetLabel: deployment
+        - sourceLabels: [__meta_kubernetes_pod_label_version]
+          targetLabel: version
+{{- end }}

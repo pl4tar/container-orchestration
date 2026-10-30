@@ -1,0 +1,6 @@
+apiVersion: v2
+name: shop
+description: Helm chart for shop (api, worker, postgres)
+type: application
+version: 0.6.0
+appVersion: "1.0"

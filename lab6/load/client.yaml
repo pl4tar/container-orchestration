@@ -1,0 +1,34 @@
+# Постоянный клиент: шлёт пару заказов в секунду, чтобы в перехвате было что смотреть.
+# Клиент должен быть в mesh: шифрует трафик его прокси, а не прокси api.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: load-test
+  namespace: shop
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: client
+  namespace: shop
+  labels:
+    app: client
+    team: shop
+  annotations:
+    linkerd.io/inject: enabled
+spec:
+  serviceAccountName: load-test
+  containers:
+    - name: curl
+      image: curlimages/curl:8.10.1
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits: { cpu: 100m, memory: 32Mi }
+      command:
+        - sh
+        - -c
+        - |
+          while true; do
+            curl -s -o /dev/null -X POST -d '{"payload":"secret-order"}' http://shop-api.shop/order
+            sleep 0.5
+          done

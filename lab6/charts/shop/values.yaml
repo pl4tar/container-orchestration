@@ -1,0 +1,134 @@
+priorityClasses:
+  - name: shop-critical
+    value: 100000
+    preemptionPolicy: PreemptLowerPriority
+    description: "Критический путь заказа: api, postgres"
+
+api:
+  replicaCount: 2
+  image:
+    repository: lab6-api
+    tag: "1.0"
+    pullPolicy: IfNotPresent
+  # Образ у версий один, различаются только env. Каждая включённая версия — свой Deployment.
+  versions:
+    v1:
+      enabled: true
+      flaky: false
+    v2:
+      enabled: true
+      fail: false
+  flakyRate: "0.3"
+  trafficSplit:
+    enabled: true
+    v2Weight: 10
+  mesh:
+    enabled: true
+    # all-unauthenticated: Prometheus вне mesh продолжает скрейпить /metrics.
+    # Для проверки identity на время ставим all-authenticated.
+    inboundPolicy: all-unauthenticated
+    retries:
+      enabled: true
+      http: "5xx"
+      limit: "3"   # по умолчанию 1: при 30% сбоев клиент всё ещё видел бы 9%
+  service:
+    port: 80
+    targetPort: 8080
+    type: ClusterIP   # NodePort не нужен: нагрузка идёт изнутри кластера, через прокси клиента
+  priorityClassName: shop-critical
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "100Mi"
+    limits:
+      cpu: "250m"
+      memory: "100Mi"
+  pdb:
+    enabled: true
+    maxUnavailable: 1
+  healthFail: false
+  extraLabels:
+    team: shop
+  spread:
+    mode: topologySpread
+    topologyKey: kubernetes.io/hostname
+    maxSkew: 1
+    whenUnsatisfiable: DoNotSchedule
+    antiAffinityType: preferred
+
+gate:
+  enabled: true
+  image:
+    repository: lab6-gate
+    tag: "1.0"
+    pullPolicy: IfNotPresent
+  promUrl: http://prometheus-operated.monitoring:9090
+  window: 30s          # окно rate(): короче минуты, чтобы плохой релиз виден был быстрее
+  interval: 15
+  startWeight: 10
+  step: 20
+  minRps: 1            # при меньшей нагрузке на v2 доля ошибок ни о чём не говорит
+  maxErrorRate: 0.05
+  maxLatency: 0.5      # секунды, p95
+  badChecks: 2         # откат только после двух плохих проверок подряд
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "32Mi"
+    limits:
+      cpu: "100m"
+      memory: "64Mi"
+
+worker:
+  enabled: false  # лаба про api и postgres: заказы никто не обрабатывает, экономим память
+  replicaCount: 2
+  image:
+    repository: lab3-worker
+    tag: v2
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "100Mi"
+    limits:
+      cpu: "500m"
+      memory: "100Mi"
+  extraLabels:
+    team: shop
+
+postgres:
+  instances: 1
+  storage:
+    size: 1Gi
+  priorityClassName: shop-critical
+  enablePDB: true
+  resources:
+    requests:
+      cpu: "1"
+      memory: "384Mi"   # 189Mi (krr за 30 мин) не хватило: OOMKilled, когда таблица выросла
+    limits:
+      cpu: "1"
+      memory: "384Mi"
+  extraLabels:
+    team: shop
+
+serviceMonitor:
+  enabled: true
+
+prometheusRule:
+  enabled: true
+  errorRatio: 0.05   # тот же порог, что у гейта
+  retryRatio: 0.2    # повторов на запрос клиента
+
+dashboard:
+  enabled: true
+
+networkPolicies:
+  # default-deny из лабы 5 отрезал бы прокси mesh от его control plane.
+  enabled: false
+  dns:
+    enabled: true
+    port: 53
+  postgres:
+    port: 5432
+    allowedApiLabel: "api"

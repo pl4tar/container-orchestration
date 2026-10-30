@@ -1,0 +1,53 @@
+{{- if .Values.prometheusRule.enabled }}
+{{- $ns := .Release.Namespace }}
+{{- $inbound := printf "namespace=%q,direction=\"inbound\",tls=\"true\",version!=\"\"" $ns }}
+{{- $route := printf "namespace=%q,parent_name=\"%s-api\"" $ns .Release.Name }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Release.Name }}-alerts
+  namespace: {{ $ns }}
+  labels:
+    {{- include "shop.labels" . | nindent 4 }}
+    release: kube-prom
+spec:
+  groups:
+    - name: shop.mesh
+      rules:
+        # Смотрим на inbound-прокси, а не на клиента: retries прячут ошибки от клиента.
+        - alert: ShopApiHighErrorRate
+          expr: |
+            sum by (version) (rate(response_total{ {{- $inbound }},status_code=~"5.."}[2m]))
+              / sum by (version) (rate(response_total{ {{- $inbound }}}[2m]))
+              > {{ .Values.prometheusRule.errorRatio }}
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: {{ `"Версия {{ $labels.version }} отдаёт 5xx: {{ $value | humanizePercentage }}"` }}
+            description: "Клиент может этого не видеть из-за retries. Проверьте логи версии и релиз."
+
+        # Много повторов — проблема ещё скрыта, но backend уже несёт лишнюю нагрузку.
+        - alert: ShopApiRetryPressure
+          expr: |
+            sum(rate(outbound_http_route_retry_requests_total{ {{- $route }}}[2m]))
+              / sum(rate(outbound_http_route_request_statuses_total{ {{- $route }}}[2m]))
+              > {{ .Values.prometheusRule.retryRatio }}
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: {{ `"На запрос приходится {{ $value | humanize }} повторов"` }}
+            description: "Запас по retries расходуется, а нагрузка на backend и Postgres растёт."
+
+        # Здоровый релиз доходит до 100% примерно за полторы минуты.
+        - alert: ShopCanaryNotCompleted
+          expr: |
+            gate_v2_weight{namespace="{{ $ns }}"} < 100
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: {{ `"Релиз v2 не завершён: вес {{ $value }}%"` }}
+            description: "Гейт откатил релиз или ждёт данных. Нужно решение человека."
+{{- end }}

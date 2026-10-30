@@ -1,0 +1,119 @@
+{{- if .Values.gate.enabled }}
+{{- $selector := printf "namespace=%q,deployment=%q,direction=\"inbound\",tls=\"true\"" .Release.Namespace (printf "%s-api-v2" .Release.Name) }}
+{{- $window := .Values.gate.window }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}-gate
+  labels:
+    {{- include "shop.labels" . | nindent 4 }}
+---
+# Гейту нужен только этот маршрут: прочитать правила и записать веса.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-gate
+  labels:
+    {{- include "shop.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["httproutes"]
+    resourceNames: [{{ printf "%s-api" .Release.Name | quote }}]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-gate
+  labels:
+    {{- include "shop.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Release.Name }}-gate
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Release.Name }}-gate
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-gate
+  labels:
+    app: gate
+    {{- include "shop.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  # Два гейта одновременно начали бы спорить о весах.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: gate
+  template:
+    metadata:
+      labels:
+        app: gate
+        {{- include "shop.labels" . | nindent 8 }}
+      annotations:
+        # Новая конфигурация v2 — новый релиз: под гейта пересоздаётся и начинает со START_WEIGHT.
+        checksum/release: {{ toJson .Values.api.versions.v2 | sha256sum }}
+    spec:
+      serviceAccountName: {{ .Release.Name }}-gate
+      containers:
+        - name: gate
+          image: "{{ .Values.gate.image.repository }}:{{ .Values.gate.image.tag }}"
+          imagePullPolicy: {{ .Values.gate.image.pullPolicy }}
+          ports:
+            - name: metrics
+              containerPort: 9100
+          env:
+            - name: PROM_URL
+              value: {{ .Values.gate.promUrl | quote }}
+            - name: RPS_QUERY
+              value: {{ printf "sum(rate(response_total{%s}[%s]))" $selector $window | quote }}
+            # or vector(0): у здоровой версии серии с 5xx нет вовсе, без этого запрос вернул бы пустоту.
+            - name: ERROR_QUERY
+              value: {{ printf "(sum(rate(response_total{%s,status_code=~\"5..\"}[%s])) or vector(0)) / sum(rate(response_total{%s}[%s]))" $selector $window $selector $window | quote }}
+            - name: LATENCY_QUERY
+              value: {{ printf "histogram_quantile(0.95, sum by (le) (rate(response_latency_ms_bucket{%s}[%s]))) / 1000" $selector $window | quote }}
+            - name: INTERVAL
+              value: {{ .Values.gate.interval | quote }}
+            - name: START_WEIGHT
+              value: {{ .Values.gate.startWeight | quote }}
+            - name: STEP
+              value: {{ .Values.gate.step | quote }}
+            - name: MIN_RPS
+              value: {{ .Values.gate.minRps | quote }}
+            - name: MAX_ERROR_RATE
+              value: {{ .Values.gate.maxErrorRate | quote }}
+            - name: MAX_LATENCY
+              value: {{ .Values.gate.maxLatency | quote }}
+            - name: BAD_CHECKS
+              value: {{ .Values.gate.badChecks | quote }}
+            - name: NAMESPACE
+              value: {{ .Release.Namespace | quote }}
+            - name: ROUTE_NAME
+              value: {{ printf "%s-api" .Release.Name | quote }}
+            - name: V1_BACKEND
+              value: {{ printf "%s-api-v1" .Release.Name | quote }}
+            - name: V2_BACKEND
+              value: {{ printf "%s-api-v2" .Release.Name | quote }}
+          resources:
+            {{- toYaml .Values.gate.resources | nindent 12 }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ .Release.Name }}-gate
+  labels:
+    {{- include "shop.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app: gate
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: 10s
+{{- end }}
